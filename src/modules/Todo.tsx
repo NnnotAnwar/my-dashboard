@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
-import { Plus, Trash2, Check, Loader2, AlertCircle } from "lucide-react";
-// 1. Импортируем магию анимации
+import { Plus, Trash2, Check, Loader2, AlertCircle, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 interface TodoItem {
     id: string;
@@ -14,6 +14,7 @@ export function Todo() {
     const [todos, setTodos] = useState<TodoItem[]>([]);
     const [newTodo, setNewTodo] = useState("");
     const [loading, setLoading] = useState(true);
+    const [aiLoading, setAiLoading] = useState(false); // Состояние загрузки AI
     const [error, setError] = useState("");
 
     useEffect(() => {
@@ -25,8 +26,7 @@ export function Todo() {
             const { data, error } = await supabase
                 .from("todos")
                 .select("*")
-                .order("created_at", { ascending: false }); // Новые сверху
-
+                .order("created_at", { ascending: false });
             if (error) throw error;
             setTodos(data || []);
         } catch (err: any) {
@@ -36,95 +36,132 @@ export function Todo() {
         }
     };
 
-    const addTodo = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newTodo.trim()) return;
-
-        // 1. Сначала узнаем, КТО сейчас в сети
+    // Обычное добавление задачи
+    const addTodo = async (title: string) => {
         const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-        if (!user) {
-            setError("Вы не авторизованы!");
-            return;
-        }
-
-        // Оптимистичное обновление (показываем сразу)
         const tempId = Math.random().toString();
-        const tempTodo = { id: tempId, title: newTodo, is_completed: false };
+        const tempTodo = { id: tempId, title: title, is_completed: false };
 
-        setTodos([tempTodo, ...todos]);
-        setNewTodo("");
+        setTodos((prev) => [tempTodo, ...prev]);
 
         try {
-            // 2. Явно отправляем user_id вместе с задачей
             const { data, error } = await supabase
                 .from("todos")
-                .insert([
-                    {
-                        title: tempTodo.title,
-                        user_id: user.id  // <--- ВОТ ЭТО ИСПРАВЛЕНИЕ
-                    }
-                ])
+                .insert([{ title: title, user_id: user.id }])
                 .select()
                 .single();
 
             if (error) throw error;
-
-            // Заменяем фейковую задачу на настоящую из базы
             setTodos((prev) => prev.map(t => t.id === tempId ? data : t));
-        } catch (err: any) {
-            console.error("Ошибка Supabase:", err); // Смотри детали в консоли (F12)
-            setError(err.message || "Не удалось добавить задачу");
-            // Если не вышло — убираем фейковую задачу, чтобы не обманывать
+        } catch (err) {
             setTodos((prev) => prev.filter(t => t.id !== tempId));
+            console.error(err);
         }
     };
 
-    const toggleTodo = async (id: string, isCompleted: boolean) => {
-        // Мгновенно меняем UI
-        setTodos(todos.map(t => t.id === id ? { ...t, is_completed: !isCompleted } : t));
+    const handleManualSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newTodo.trim()) return;
+        addTodo(newTodo);
+        setNewTodo("");
+    };
+
+    // --- МАГИЯ AI (Через официальную библиотеку) ---
+    const handleAiGenerate = async () => {
+        if (!newTodo.trim()) {
+            setError("Напиши тему задачи!");
+            return;
+        }
+
+        setAiLoading(true);
+        setError("");
 
         try {
-            await supabase.from("todos").update({ is_completed: !isCompleted }).eq("id", id);
-        } catch (err) {
-            console.error("Ошибка обновления", err);
+            // 1. Подключаемся к Google AI
+            const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_KEY);
+
+            // 2. Выбираем модель (самая быстрая и стабильная сейчас)
+            //const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+            const prompt = `Я хочу выполнить задачу: "${newTodo}". 
+      Разбей её на 3-5 коротких, конкретных подзадач. 
+      Ответь только списком задач через запятую, без нумерации. 
+      Пример: Купить билеты, Собрать вещи`;
+
+            // 3. Спрашиваем
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            const textAnswer = response.text();
+
+            if (textAnswer) {
+                // Чистим ответ и разбиваем на массив
+                const tasks = textAnswer.split(",").map((t) => t.trim());
+
+                for (const task of tasks) {
+                    if (task) await addTodo(task);
+                }
+                setNewTodo("");
+            }
+        } catch (err: any) {
+            console.error("Ошибка AI:", err);
+            // Если и тут ошибка - значит проблема в Ключе или Стране
+            setError("Не удалось получить ответ. Проверь консоль (F12).");
+        } finally {
+            setAiLoading(false);
         }
     };
 
     const deleteTodo = async (id: string) => {
-        // Анимация сработает автоматически при удалении из массива
         setTodos(todos.filter((t) => t.id !== id));
-
-        try {
-            await supabase.from("todos").delete().eq("id", id);
-        } catch (err) {
-            console.error("Ошибка удаления", err);
-        }
+        await supabase.from("todos").delete().eq("id", id);
     };
 
-    if (loading) return <div className="p-8 text-gray-400 flex items-center gap-2"><Loader2 className="animate-spin"/> Загружаем задачи...</div>;
+    const toggleTodo = async (id: string, isCompleted: boolean) => {
+        setTodos(todos.map(t => t.id === id ? { ...t, is_completed: !isCompleted } : t));
+        await supabase.from("todos").update({ is_completed: !isCompleted }).eq("id", id);
+    };
+
+    if (loading) return <div className="p-8 text-gray-400 flex items-center gap-2"><Loader2 className="animate-spin"/> Загрузка...</div>;
 
     return (
         <div className="max-w-2xl mx-auto">
             <h1 className="text-3xl font-bold text-[#37352F] mb-6">Список задач</h1>
 
-            {/* Форма добавления */}
-            <form onSubmit={addTodo} className="flex gap-2 mb-8">
+            {/* Форма */}
+            <div className="flex gap-2 mb-8">
                 <input
                     type="text"
                     value={newTodo}
                     onChange={(e) => setNewTodo(e.target.value)}
-                    placeholder="Что нужно сделать?"
+                    onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit(e)}
+                    placeholder="Например: Устроить вечеринку..."
                     className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black/5 outline-none transition-all shadow-sm"
                 />
+
+                {/* Кнопка ручного добавления */}
                 <button
-                    type="submit"
-                    disabled={!newTodo.trim()}
-                    className="bg-[#37352F] text-white px-6 rounded-lg hover:bg-black transition-colors disabled:opacity-50 font-medium"
+                    onClick={handleManualSubmit}
+                    disabled={!newTodo.trim() || aiLoading}
+                    className="bg-white border border-gray-300 text-gray-700 px-4 rounded-lg hover:bg-gray-50 transition-colors"
+                    title="Просто добавить"
                 >
                     <Plus />
                 </button>
-            </form>
+
+                {/* Кнопка AI Магии */}
+                <button
+                    onClick={handleAiGenerate}
+                    disabled={!newTodo.trim() || aiLoading}
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-2 font-medium shadow-md"
+                    title="Придумать план с AI"
+                >
+                    {aiLoading ? <Loader2 className="animate-spin" /> : <Sparkles size={20} />}
+                    <span className="hidden md:inline">AI План</span>
+                </button>
+            </div>
 
             {error && (
                 <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 flex items-center gap-2">
@@ -132,59 +169,36 @@ export function Todo() {
                 </div>
             )}
 
-            {/* АНИМИРОВАННЫЙ СПИСОК */}
+            {/* Список */}
             <ul className="space-y-3">
                 <AnimatePresence initial={false}>
                     {todos.map((todo) => (
                         <motion.li
                             key={todo.id}
-                            // Настройки анимации:
-                            layout // Плавное перемещение других элементов
-                            initial={{ opacity: 0, y: 20 }} // Появление: прозрачный и чуть ниже
-                            animate={{ opacity: 1, y: 0 }}  // Статика: видно и на месте
-                            exit={{ opacity: 0, x: -50, transition: { duration: 0.2 } }} // Удаление: влево
+                            layout
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, x: -50 }}
                             className="group flex items-center gap-3 p-4 bg-white border border-[#E9E9E7] rounded-lg shadow-sm hover:shadow-md transition-shadow"
                         >
                             <button
                                 onClick={() => toggleTodo(todo.id, todo.is_completed)}
                                 className={`flex-shrink-0 w-6 h-6 rounded border flex items-center justify-center transition-all ${
-                                    todo.is_completed
-                                        ? "bg-green-500 border-green-500 text-white"
-                                        : "border-gray-300 hover:border-gray-400 text-transparent"
+                                    todo.is_completed ? "bg-green-500 border-green-500 text-white" : "border-gray-300 text-transparent"
                                 }`}
                             >
-                                <Check size={14} strokeWidth={3} />
+                                <Check size={14} />
                             </button>
-
-                            <span
-                                className={`flex-1 text-[#37352F] transition-all ${
-                                    todo.is_completed ? "line-through text-gray-400" : ""
-                                }`}
-                            >
+                            <span className={`flex-1 ${todo.is_completed ? "line-through text-gray-400" : ""}`}>
                 {todo.title}
               </span>
-
-                            <button
-                                onClick={() => deleteTodo(todo.id)}
-                                className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2"
-                                title="Удалить"
-                            >
+                            <button onClick={() => deleteTodo(todo.id)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2">
                                 <Trash2 size={18} />
                             </button>
                         </motion.li>
                     ))}
                 </AnimatePresence>
             </ul>
-
-            {todos.length === 0 && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-center text-gray-400 mt-10"
-                >
-                    Пока задач нет. Отдыхай! 🌴
-                </motion.div>
-            )}
         </div>
     );
 }
