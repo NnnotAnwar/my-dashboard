@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
-import { Plus, Trash2, Check, Loader2, AlertCircle, Sparkles, CheckCheck, Calendar as CalendarIcon, Clock } from "lucide-react";
+import { Plus, Trash2, Check, Loader2, AlertCircle, Sparkles, Calendar as CalendarIcon, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
