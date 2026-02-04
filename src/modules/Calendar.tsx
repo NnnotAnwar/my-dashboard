@@ -12,7 +12,7 @@ import {
     subMonths
 } from "date-fns";
 import { ru } from "date-fns/locale"; // Для русского языка
-import { ChevronLeft, ChevronRight, ExternalLink, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { clsx } from "clsx";
 
 export function Calendar() {
