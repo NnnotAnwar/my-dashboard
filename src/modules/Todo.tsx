@@ -82,7 +82,7 @@ export function Todo() {
 
         try {
             const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_KEY);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
             const prompt = `Задача: "${newTodo}". Разбей на 3-5 шагов. Ответ только списком через запятую.`;
             const result = await model.generateContent(prompt);
