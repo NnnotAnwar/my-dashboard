@@ -47,7 +47,7 @@ export function Weather() {
                 cityName: name,
             });
 
-        } catch (err) {
+        } catch {
             setError("Не удалось найти город или данные о погоде");
         } finally {
             setLoading(false);
