@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import {
     Trash2, Loader2, ShieldAlert, Users, CheckCircle,
-    List, RefreshCw, UserCheck, ShieldPlus, Search, X
+    List, ShieldPlus, Search, X
 } from "lucide-react";
 
 interface AdminTodo {

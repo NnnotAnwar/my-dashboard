@@ -166,30 +166,30 @@ export function Todo() {
     };
 
     // УДАЛИТЬ ВСЕ ВЫПОЛНЕННЫЕ
-    const deleteCompleted = async () => {
-        //if (!window.confirm("Удалить все выполненные задачи?")) return;
-
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Мгновенно скрываем из списка
-        const oldTodos = [...todos];
-        setTodos((prev) => prev.filter(t => !t.is_completed));
-
-        try {
-            const { error } = await supabase
-                .from("todos")
-                .delete()
-                .eq("user_id", user.id)
-                .eq("is_completed", true);
-
-            if (error) throw error;
-        } catch (err: any) {
-            console.error("Ошибка при удалении:", err.message);
-            setTodos(oldTodos); // Возвращаем назад при ошибке
-            setError("Ошибка при удалении из базы");
-        }
-    };
+    // const deleteCompleted = async () => {
+    //     //if (!window.confirm("Удалить все выполненные задачи?")) return;
+    //
+    //     const { data: { user } } = await supabase.auth.getUser();
+    //     if (!user) return;
+    //
+    //     // Мгновенно скрываем из списка
+    //     const oldTodos = [...todos];
+    //     setTodos((prev) => prev.filter(t => !t.is_completed));
+    //
+    //     try {
+    //         const { error } = await supabase
+    //             .from("todos")
+    //             .delete()
+    //             .eq("user_id", user.id)
+    //             .eq("is_completed", true);
+    //
+    //         if (error) throw error;
+    //     } catch (err: any) {
+    //         console.error("Ошибка при удалении:", err.message);
+    //         setTodos(oldTodos); // Возвращаем назад при ошибке
+    //         setError("Ошибка при удалении из базы");
+    //     }
+    // };
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
