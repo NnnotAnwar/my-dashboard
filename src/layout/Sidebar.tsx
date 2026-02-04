@@ -37,7 +37,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             {/* 2. Само меню */}
             <div
                 className={clsx(
-                    "fixed top-0 left-0 h-full w-64 bg-[#F7F7F5] border-r border-[#E9E9E7] p-4 flex flex-col z-50 transition-transform duration-300 ease-in-out md:translate-x-0 md:static",
+                    // Было h-full, стало min-h-screen:
+                    "fixed top-0 left-0 min-h-screen w-64 bg-[#F7F7F5] border-r border-[#E9E9E7] p-4 flex flex-col z-50 transition-transform duration-300 ease-in-out md:translate-x-0 md:static",
                     isOpen ? "translate-x-0" : "-translate-x-full"
                 )}
             >

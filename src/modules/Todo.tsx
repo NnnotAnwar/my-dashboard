@@ -1,157 +1,190 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Check, Circle, Loader2 } from "lucide-react";
-import { clsx } from "clsx";
-import { supabase } from "../supabaseClient"; // Импортируем наш клиент
+import { supabase } from "../supabaseClient";
+import { Plus, Trash2, Check, Loader2, AlertCircle } from "lucide-react";
+// 1. Импортируем магию анимации
+import { motion, AnimatePresence } from "framer-motion";
 
-interface Task {
-    id: number;
-    text: string;
-    completed: boolean;
+interface TodoItem {
+    id: string;
+    title: string;
+    is_completed: boolean;
 }
 
 export function Todo() {
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [inputValue, setInputValue] = useState("");
-    const [isLoading, setIsLoading] = useState(true); // Состояние загрузки
+    const [todos, setTodos] = useState<TodoItem[]>([]);
+    const [newTodo, setNewTodo] = useState("");
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
-    // 1. ЗАГРУЗКА: Получаем задачи из базы при запуске
     useEffect(() => {
-        fetchTasks();
+        fetchTodos();
     }, []);
 
-    const fetchTasks = async () => {
-        // Запрос к Supabase: "Дай мне все из таблицы todos, отсортируй по дате создания"
-        const { data, error } = await supabase
-            .from('todos')
-            .select('*')
-            .order('created_at', { ascending: true });
+    const fetchTodos = async () => {
+        try {
+            const { data, error } = await supabase
+                .from("todos")
+                .select("*")
+                .order("created_at", { ascending: false }); // Новые сверху
 
-        if (error) console.error('Ошибка загрузки:', error);
-        else setTasks(data || []);
-
-        setIsLoading(false);
+            if (error) throw error;
+            setTodos(data || []);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    // 2. ДОБАВЛЕНИЕ
-    const addTask = async (e: React.KeyboardEvent) => {
-        if (e.key === "Enter" && inputValue.trim()) {
-            const newTaskText = inputValue;
-            setInputValue(""); // Сразу очищаем поле для ощущения скорости
+    const addTodo = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newTodo.trim()) return;
 
-            // Отправляем в базу
+        // 1. Сначала узнаем, КТО сейчас в сети
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (!user) {
+            setError("Вы не авторизованы!");
+            return;
+        }
+
+        // Оптимистичное обновление (показываем сразу)
+        const tempId = Math.random().toString();
+        const tempTodo = { id: tempId, title: newTodo, is_completed: false };
+
+        setTodos([tempTodo, ...todos]);
+        setNewTodo("");
+
+        try {
+            // 2. Явно отправляем user_id вместе с задачей
             const { data, error } = await supabase
-                .from('todos')
-                .insert([{ text: newTaskText, completed: false }])
-                .select() // Важно: просим вернуть созданную запись (чтобы узнать её ID)
+                .from("todos")
+                .insert([
+                    {
+                        title: tempTodo.title,
+                        user_id: user.id  // <--- ВОТ ЭТО ИСПРАВЛЕНИЕ
+                    }
+                ])
+                .select()
                 .single();
 
-            if (error) {
-                console.error('Ошибка добавления:', error);
-            } else if (data) {
-                // Добавляем в локальный стейт только после подтверждения от базы
-                setTasks([...tasks, data]);
-            }
+            if (error) throw error;
+
+            // Заменяем фейковую задачу на настоящую из базы
+            setTodos((prev) => prev.map(t => t.id === tempId ? data : t));
+        } catch (err: any) {
+            console.error("Ошибка Supabase:", err); // Смотри детали в консоли (F12)
+            setError(err.message || "Не удалось добавить задачу");
+            // Если не вышло — убираем фейковую задачу, чтобы не обманывать
+            setTodos((prev) => prev.filter(t => t.id !== tempId));
         }
     };
 
-    // 3. ОБНОВЛЕНИЕ (галочка)
-    const toggleTask = async (id: number, currentStatus: boolean) => {
-        // Сначала обновляем интерфейс (оптимистичный апдейт), чтобы было мгновенно
-        setTasks(tasks.map(t => t.id === id ? { ...t, completed: !currentStatus } : t));
+    const toggleTodo = async (id: string, isCompleted: boolean) => {
+        // Мгновенно меняем UI
+        setTodos(todos.map(t => t.id === id ? { ...t, is_completed: !isCompleted } : t));
 
-        // Потом шлем запрос в базу
-        const { error } = await supabase
-            .from('todos')
-            .update({ completed: !currentStatus })
-            .eq('id', id);
-
-        if (error) {
-            console.error('Ошибка обновления:', error);
-            // Если ошибка — откатываем изменения (можно добавить логику отката)
-            fetchTasks();
+        try {
+            await supabase.from("todos").update({ is_completed: !isCompleted }).eq("id", id);
+        } catch (err) {
+            console.error("Ошибка обновления", err);
         }
     };
 
-    // 4. УДАЛЕНИЕ
-    const deleteTask = async (id: number) => {
-        // Оптимистичное удаление из интерфейса
-        setTasks(tasks.filter(t => t.id !== id));
+    const deleteTodo = async (id: string) => {
+        // Анимация сработает автоматически при удалении из массива
+        setTodos(todos.filter((t) => t.id !== id));
 
-        const { error } = await supabase
-            .from('todos')
-            .delete()
-            .eq('id', id);
-
-        if (error) {
-            console.error('Ошибка удаления:', error);
-            fetchTasks();
+        try {
+            await supabase.from("todos").delete().eq("id", id);
+        } catch (err) {
+            console.error("Ошибка удаления", err);
         }
     };
+
+    if (loading) return <div className="p-8 text-gray-400 flex items-center gap-2"><Loader2 className="animate-spin"/> Загружаем задачи...</div>;
 
     return (
-        <div className="max-w-3xl">
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-[#37352F] mb-2">Список задач</h1>
-                <div className="flex items-center gap-2 text-gray-500">
-                    <span>Синхронизировано с облаком</span>
-                    {isLoading && <Loader2 size={14} className="animate-spin" />}
-                </div>
-            </div>
+        <div className="max-w-2xl mx-auto">
+            <h1 className="text-3xl font-bold text-[#37352F] mb-6">Список задач</h1>
 
-            <div className="flex items-center gap-3 mb-6 p-2 rounded hover:bg-[#F7F7F5] transition-colors group">
-                <Plus className="text-gray-400" size={20} />
+            {/* Форма добавления */}
+            <form onSubmit={addTodo} className="flex gap-2 mb-8">
                 <input
                     type="text"
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={addTask}
-                    placeholder="Нажмите Enter, чтобы добавить задачу..."
-                    className="flex-1 bg-transparent border-none outline-none text-[#37352F] placeholder:text-gray-400 h-8"
+                    value={newTodo}
+                    onChange={(e) => setNewTodo(e.target.value)}
+                    placeholder="Что нужно сделать?"
+                    className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black/5 outline-none transition-all shadow-sm"
                 />
-            </div>
+                <button
+                    type="submit"
+                    disabled={!newTodo.trim()}
+                    className="bg-[#37352F] text-white px-6 rounded-lg hover:bg-black transition-colors disabled:opacity-50 font-medium"
+                >
+                    <Plus />
+                </button>
+            </form>
 
-            <div className="space-y-1">
-                {!isLoading && tasks.length === 0 && (
-                    <div className="text-gray-400 text-sm italic pl-10 mt-4">
-                        Список пуст.
-                    </div>
-                )}
+            {error && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 flex items-center gap-2">
+                    <AlertCircle size={18} /> {error}
+                </div>
+            )}
 
-                {tasks.map((task) => (
-                    <div
-                        key={task.id}
-                        className="group flex items-center gap-3 p-2 rounded hover:bg-[#F7F7F5] transition-colors"
-                    >
-                        <button
-                            onClick={() => toggleTask(task.id, task.completed)}
-                            className={clsx(
-                                "flex items-center justify-center w-5 h-5 rounded transition-colors",
-                                task.completed ? "text-blue-500" : "text-gray-300 hover:text-gray-400"
-                            )}
+            {/* АНИМИРОВАННЫЙ СПИСОК */}
+            <ul className="space-y-3">
+                <AnimatePresence initial={false}>
+                    {todos.map((todo) => (
+                        <motion.li
+                            key={todo.id}
+                            // Настройки анимации:
+                            layout // Плавное перемещение других элементов
+                            initial={{ opacity: 0, y: 20 }} // Появление: прозрачный и чуть ниже
+                            animate={{ opacity: 1, y: 0 }}  // Статика: видно и на месте
+                            exit={{ opacity: 0, x: -50, transition: { duration: 0.2 } }} // Удаление: влево
+                            className="group flex items-center gap-3 p-4 bg-white border border-[#E9E9E7] rounded-lg shadow-sm hover:shadow-md transition-shadow"
                         >
-                            {task.completed ? <Check size={18} /> : <Circle size={18} />}
-                        </button>
+                            <button
+                                onClick={() => toggleTodo(todo.id, todo.is_completed)}
+                                className={`flex-shrink-0 w-6 h-6 rounded border flex items-center justify-center transition-all ${
+                                    todo.is_completed
+                                        ? "bg-green-500 border-green-500 text-white"
+                                        : "border-gray-300 hover:border-gray-400 text-transparent"
+                                }`}
+                            >
+                                <Check size={14} strokeWidth={3} />
+                            </button>
 
-                        <span
-                            className={clsx(
-                                "flex-1 text-sm transition-all cursor-pointer",
-                                task.completed ? "text-gray-400 line-through" : "text-[#37352F]"
-                            )}
-                            onClick={() => toggleTask(task.id, task.completed)}
-                        >
-              {task.text}
-            </span>
+                            <span
+                                className={`flex-1 text-[#37352F] transition-all ${
+                                    todo.is_completed ? "line-through text-gray-400" : ""
+                                }`}
+                            >
+                {todo.title}
+              </span>
 
-                        <button
-                            onClick={() => deleteTask(task.id)}
-                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity p-1 rounded"
-                            title="Удалить"
-                        >
-                            <Trash2 size={16} />
-                        </button>
-                    </div>
-                ))}
-            </div>
+                            <button
+                                onClick={() => deleteTodo(todo.id)}
+                                className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2"
+                                title="Удалить"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        </motion.li>
+                    ))}
+                </AnimatePresence>
+            </ul>
+
+            {todos.length === 0 && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-center text-gray-400 mt-10"
+                >
+                    Пока задач нет. Отдыхай! 🌴
+                </motion.div>
+            )}
         </div>
     );
 }
