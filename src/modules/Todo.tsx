@@ -60,7 +60,7 @@ export function Todo() {
                 return;
             }
 
-            console.log("Твоя роль в базе:", profile?.role);
+            // console.log("Твоя роль в базе:", profile?.role);
 
             if (profile && profile.role === 'admin') {
                 setIsAdmin(true);
