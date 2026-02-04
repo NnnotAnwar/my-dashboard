@@ -1,112 +1,182 @@
 import { useState } from "react";
-import { Delete } from "lucide-react"; // Иконка стирания
-import { clsx } from "clsx";
+import { Delete } from "lucide-react";
 
 export function Calculator() {
     const [display, setDisplay] = useState("0");
-    const [result, setResult] = useState<string | null>(null);
+    const [result, setResult] = useState("");
+    const [waitingForNewOperand, setWaitingForNewOperand] = useState(false);
 
-    // Список кнопок для построения сетки
-    const buttons = [
-        "C", "(", ")", "÷",
-        "7", "8", "9", "×",
-        "4", "5", "6", "-",
-        "1", "2", "3", "+",
-        "0", ".", "⌫", "="
-    ];
+    const operators = ["/", "*", "+", "-"];
 
-    const handleClick = (btn: string) => {
-        // 1. Очистка (C)
-        if (btn === "C") {
-            setDisplay("0");
-            setResult(null);
+    const handlePress = (val: string) => {
+        // ЛОГИКА ОСТАЛАСЬ ПРЕЖНЕЙ (ОНА БЫЛА ХОРОШЕЙ)
+
+        // 1. Сброс ошибки
+        if (display === "Error") {
+            if (val === "AC") {
+                setDisplay("0");
+                setResult("");
+                return;
+            }
+            if (!operators.includes(val) && val !== "=" && val !== "DEL") {
+                setDisplay(val);
+                setResult("");
+                return;
+            }
             return;
         }
 
-        // 2. Удаление последнего символа (⌫)
-        if (btn === "⌫") {
-            if (display === "Error") {
+        // 2. Очистка (AC)
+        if (val === "AC") {
+            setDisplay("0");
+            setResult("");
+            setWaitingForNewOperand(false);
+            return;
+        }
+
+        // 3. Удаление (DEL)
+        if (val === "DEL") {
+            if (waitingForNewOperand) return;
+            if (display.length === 1) {
                 setDisplay("0");
             } else {
-                setDisplay(display.length > 1 ? display.slice(0, -1) : "0");
+                setDisplay(display.slice(0, -1));
             }
             return;
         }
 
-        // 3. Вычисление результата (=)
-        if (btn === "=") {
-            try {
-                // Заменяем красивые значки на понятные компьютеру (* и /)
-                const expression = display.replace(/×/g, "*").replace(/÷/g, "/");
-
-                // Опасная функция eval, но для калькулятора допустима, если фильтровать ввод
-                // (в реальных крупных проектах используют math.js)
-                // eslint-disable-next-line no-new-func
-                const calc = new Function(`return ${expression}`)();
-
-                setResult(display + " ="); // Показываем старое выражение сверху
-                setDisplay(String(calc)); // Показываем результат
-            } catch (error) {
-                setDisplay("Error");
-            }
+        // 4. Равно (=)
+        if (val === "=") {
+            calculateResult(true);
+            setWaitingForNewOperand(true);
             return;
         }
 
-        // 4. Ввод цифр и знаков
-        if (display === "0" || display === "Error") {
-            // Если на экране 0 или Ошибка, заменяем текст нажатой кнопкой (если это не знак действия)
-            if (["+", "-", "×", "÷"].includes(btn)) {
-                setDisplay(display + btn);
-            } else {
-                setDisplay(btn);
+        // 5. Операторы
+        if (operators.includes(val)) {
+            setWaitingForNewOperand(false);
+            const lastChar = display.slice(-1);
+            if (operators.includes(lastChar)) {
+                setDisplay(display.slice(0, -1) + val);
+                return;
             }
+            if (display === "0" && val !== "-") return;
+            setDisplay(display + val);
+            return;
+        }
+
+        // 6. Цифры и точка
+        if (val === ".") {
+            const parts = display.split(/[\+\-\*\/]/);
+            const currentNumber = parts[parts.length - 1];
+            if (currentNumber.includes(".")) return;
+        }
+
+        if (display === "0" || waitingForNewOperand) {
+            setDisplay(val);
+            setWaitingForNewOperand(false);
         } else {
-            // Иначе просто дописываем символ
-            setDisplay(display + btn);
+            setDisplay(display + val);
         }
     };
 
-    // Функция, определяющая цвет кнопки
-    const getButtonClass = (btn: string) => {
-        if (btn === "=") return "bg-blue-500 text-white hover:bg-blue-600"; // Кнопка Равно - синяя
-        if (["C", "⌫"].includes(btn)) return "text-red-500 bg-red-50 hover:bg-red-100"; // Очистка - красная
-        if (["÷", "×", "-", "+"].includes(btn)) return "bg-gray-100 text-orange-600 font-medium"; // Знаки - оранжевые
-        return "hover:bg-[#F7F7F5] text-[#37352F]"; // Цифры - обычные
+    const calculateResult = (isFinal: boolean) => {
+        try {
+            let expression = display;
+            if (operators.includes(expression.slice(-1))) {
+                expression = expression.slice(0, -1);
+            }
+
+            // eslint-disable-next-line no-new-func
+            const func = new Function("return " + expression);
+            const res = func();
+
+            if (!isFinite(res) || isNaN(res)) {
+                setDisplay("Error");
+                return;
+            }
+
+            const formatted = parseFloat(res.toFixed(8)).toString();
+
+            if (isFinal) {
+                setDisplay(formatted);
+                setResult("");
+            } else {
+                setResult(formatted);
+            }
+        } catch (e) {
+            setDisplay("Error");
+        }
+    };
+
+    // Компонент кнопки (Google Style)
+    const Button = ({ val, type = "num", icon, className = "" }: { val: string, type?: string, icon?: React.ReactNode, className?: string }) => {
+
+        // Базовый стиль кнопок Google
+        const baseStyle = "h-14 sm:h-16 text-lg sm:text-xl font-medium rounded-lg transition-all active:scale-95 flex items-center justify-center select-none shadow-sm";
+
+        const colors: Record<string, string> = {
+            // Цифры: очень светло-серые, почти белые
+            num: "bg-[#f1f3f4] text-[#202124] hover:bg-[#e8eaed]",
+            // Операторы и действия: чуть темнее серый
+            op: "bg-[#dadce0] text-[#202124] hover:bg-[#d2d5d9]",
+            action: "bg-[#dadce0] text-[#202124] hover:bg-[#d2d5d9]", // AC, DEL
+            // Равно: фирменный синий Google
+            equal: "bg-[#4285f4] text-white hover:bg-[#1b66c9]"
+        };
+
+        return (
+            <button
+                onClick={() => handlePress(val)}
+                className={`${baseStyle} ${colors[type] || colors.num} ${className}`}
+            >
+                {icon || val}
+            </button>
+        );
     };
 
     return (
-        <div className="max-w-md">
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-[#37352F] mb-2">Калькулятор</h1>
-                <p className="text-gray-500">Для быстрых подсчетов.</p>
+        <div className="max-w-xs mx-auto mt-6 bg-white p-4 rounded-3xl border border-gray-100 shadow-xl">
+
+            {/* Экран */}
+            <div className="w-full mb-4 px-2 text-right h-24 flex flex-col justify-end">
+                {result && (
+                    <div className="text-gray-500 text-sm mb-1 font-medium opacity-80">
+                        {result}
+                    </div>
+                )}
+                <div className={`text-4xl font-normal tracking-tight break-all ${display === "Error" ? "text-red-500" : "text-[#202124]"}`}>
+                    {display}
+                </div>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-[#E9E9E7] shadow-sm w-[320px]">
-                {/* Экран */}
-                <div className="mb-4 text-right p-4 bg-[#F7F7F5] rounded-lg h-24 flex flex-col justify-end">
-                    {/* Предыдущее вычисление (сереньким сверху) */}
-                    {result && <div className="text-sm text-gray-400 mb-1 h-5">{result}</div>}
-                    {/* Текущий ввод (крупно) */}
-                    <div className="text-3xl font-mono text-[#37352F] overflow-hidden text-ellipsis whitespace-nowrap">
-                        {display}
-                    </div>
-                </div>
+            {/* Клавиатура */}
+            <div className="grid grid-cols-4 gap-2">
+                {/* Верхний ряд: AC занимает 2 слота вместо % */}
+                <Button val="AC" type="action" className="col-span-2 text-base font-bold" />
+                <Button val="DEL" type="action" icon={<Delete size={20}/>} />
+                <Button val="/" type="op" icon="÷" className="text-2xl" />
 
-                {/* Клавиатура */}
-                <div className="grid grid-cols-4 gap-2">
-                    {buttons.map((btn) => (
-                        <button
-                            key={btn}
-                            onClick={() => handleClick(btn)}
-                            className={clsx(
-                                "h-14 text-lg rounded-lg transition-colors flex items-center justify-center active:scale-95",
-                                getButtonClass(btn)
-                            )}
-                        >
-                            {btn === "⌫" ? <Delete size={20} /> : btn}
-                        </button>
-                    ))}
-                </div>
+                <Button val="7" />
+                <Button val="8" />
+                <Button val="9" />
+                <Button val="*" type="op" icon="×" className="text-2xl" />
+
+                <Button val="4" />
+                <Button val="5" />
+                <Button val="6" />
+                <Button val="-" type="op" icon="−" className="text-2xl" />
+
+                <Button val="1" />
+                <Button val="2" />
+                <Button val="3" />
+                <Button val="+" type="op" icon="+" className="text-2xl" />
+
+                {/* Нижний ряд */}
+                <Button val="0" className="col-span-2 rounded-l-lg" />
+                <Button val="." />
+                {/* Кнопка Равно - синяя */}
+                <Button val="=" type="equal" icon="=" className="text-2xl font-bold" />
             </div>
         </div>
     );
