@@ -1,7 +1,7 @@
 # 🚀 Personal Dashboard & AI Task Manager
 
 > **⚠️ Status: Work in Progress**
-> This project is currently under active development. While core modules like Auth, Dashboard, and Todo are fully functional, other features are still being built and polished.
+> This project is currently under active development. Most features are still being built and polished.
 
 A modern, high-performance web application for personal productivity. It combines a real-time dashboard with an AI-powered task manager.
 
