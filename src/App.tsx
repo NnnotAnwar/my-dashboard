@@ -13,6 +13,7 @@ import { Calculator } from "./modules/Calculator";
 import { Calendar } from "./modules/Calendar";
 import { Loader2 } from "lucide-react";
 
+
 function App() {
     const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
