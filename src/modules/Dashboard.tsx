@@ -1,161 +1,117 @@
-// import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, CloudRain, CheckSquare } from "lucide-react";
 import { supabase } from "../supabaseClient";
-import {
-    CheckCircle2,
-    CloudSun,
-    Calendar,
-    ArrowRight,
-    Plus,
-    Calculator,
-    Loader2
-} from "lucide-react";
-import {useQuery} from "@tanstack/react-query";
+import { useLanguage } from "../context/LanguageContext";
 
-async function fetchWeather() {
-    try {
-        const res = await fetch("https://api.open-meteo.com/v1/forecast?latitude=50.0755&longitude=14.4378&current=temperature_2m");
-        const data = await res.json();
-        const temperature: number = data.current.temperature_2m;
-        return temperature;
-    } catch {
-        return null;
-    }
+// 1. Функция получения погоды
+async function fetchWeather(): Promise<number | null> {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+            resolve(null);
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                try {
+                    const { latitude, longitude } = position.coords;
+                    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m`);
+                    const data = await res.json();
+                    resolve(data.current.temperature_2m);
+                } catch {
+                    resolve(null);
+                }
+            },
+            () => resolve(null)
+        );
+    });
 }
 
-async function fetchUser() {
+// 2. Функция подсчета задач
+async function fetchTaskCount() {
     const { data: { user } } = await supabase.auth.getUser();
-    return user;
+    if(!user) return 0;
+    const { count } = await supabase.from('todos').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_completed', false);
+    return count || 0;
 }
 
-async function fetchTasksCount(userId: string) {
-    const {count} = await supabase
-        .from("todos")
-        .select("*", { count: "exact", head: true })
-        .eq("is_completed", false)
-        .eq("user_id", userId);
-    return count;
+// 3. НОВАЯ ФУНКЦИЯ: Узнаем имя из Email
+async function fetchUserName() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !user.email) return "Friend";
+
+    // Берем часть до собачки (anwar@... -> anwar)
+    const namePart = user.email.split("@")[0];
+
+    // Делаем первую букву большой (anwar -> Anwar)
+    return namePart.charAt(0).toUpperCase() + namePart.slice(1);
 }
 
 export function Dashboard() {
-    const { data: weatherTemp, isLoading: isWeatherLoading } = useQuery({
-        queryKey: ['weather'], // Уникальное имя для кэша
-        queryFn: fetchWeather, // Наша функция-курьер
+    const { t } = useLanguage();
+
+    const { data: temp, isLoading: isWeatherLoading } = useQuery({
+        queryKey: ['weather'],
+        queryFn: fetchWeather,
+        retry: false,
+        refetchOnWindowFocus: false
     });
-    const { data : user, isLoading: isUserLoading } = useQuery({
-        queryKey: ['user'],
-        queryFn: fetchUser
-    })
-    const {data: tasksCount} = useQuery(
-        {
-            queryKey: ['tasks', user?.id],
-            queryFn: () => fetchTasksCount(user?.id || ""),
-            enabled: !!user?.id,
-        }
-    )
 
-    const getUserName = () => {
-        if (!user?.email) return "Друг";
-        const name = user.email.split("@")[0];
-        return name.charAt(0).toUpperCase() + name.slice(1);
-    }
+    const { data: taskCount } = useQuery({ queryKey: ['taskCount'], queryFn: fetchTaskCount });
 
+    // Запрашиваем имя
+    const { data: userName } = useQuery({ queryKey: ['userName'], queryFn: fetchUserName });
 
-    // Определяем приветствие по времени суток
     const getGreeting = () => {
         const hour = new Date().getHours();
-        if (hour < 6) return "Доброй ночи";
-        if (hour < 12) return "Доброе утро";
-        if (hour < 18) return "Добрый день";
-        return "Добрый вечер";
+        if (hour < 12) return t.dashboard.greeting_morning;
+        if (hour < 18) return t.dashboard.greeting_day;
+        return t.dashboard.greeting_evening;
     };
 
-    if (isWeatherLoading || isUserLoading) {
-        return (
-            <div className="p-8 flex items-center gap-2 text-gray-400">
-                <Loader2 className="animate-spin" /> Загрузка дашборда...
-            </div>
-        );
-    }
+    const showWeather = isWeatherLoading || (temp !== null && temp !== undefined);
 
     return (
-        <div className="max-w-4xl mx-auto">
-            {/* 1. Блок Приветствия */}
-            <div className="mb-8">
-                <h1 className="text-3xl md:text-4xl font-bold text-[#37352F] mb-2">
-                    {getGreeting()}, {getUserName()}.
+        <div className="space-y-6">
+            <header>
+                {/* 👇 ТЕПЕРЬ ИМЯ ДИНАМИЧЕСКОЕ */}
+                <h1 className="text-4xl font-black text-[#202124] tracking-tight mb-2">
+                    {getGreeting()}, {userName || "..."}! 👋
                 </h1>
-                <p className="text-gray-500 text-lg">
-                    {(tasksCount || 0) > 0
-                        ? `У тебя ${tasksCount} незаконченных дел. Пора за работу!`
-                        : "Все задачи выполнены. Ты великолепен!"}
+                <p className="text-gray-500 text-lg font-medium">
+                    {t.dashboard.subtitle}
                 </p>
-            </div>
+            </header>
 
-            {/* 2. Сетка Виджетов */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            <div className={`grid grid-cols-1 ${showWeather ? "md:grid-cols-2" : "md:grid-cols-1"} gap-4`}>
 
-                {/* Виджет: Задачи */}
-                <Link to="/todo" className="group bg-white p-6 rounded-xl border border-[#E9E9E7] shadow-sm hover:shadow-md transition-all hover:border-blue-200">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                            <CheckCircle2 size={24} />
+                {/* Карточка задач */}
+                <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between transition-all hover:shadow-md">
+                    <div>
+                        <div className="text-gray-400 font-bold text-xs uppercase tracking-wider mb-1">{t.dashboard.stat_tasks}</div>
+                        <div className="text-5xl font-black text-gray-800">{taskCount ?? "-"}</div>
+                    </div>
+
+                    <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400">
+                        <CheckSquare size={24} />
+                    </div>
+                </div>
+
+                {/* Карточка погоды */}
+                {showWeather && (
+                    <div className="p-6 bg-blue-500 rounded-3xl text-white shadow-lg shadow-blue-200 flex items-center justify-between transition-all">
+                        <div>
+                            <div className="text-blue-100 font-bold text-xs uppercase tracking-wider mb-1">{t.dashboard.stat_weather}</div>
+                            <div className="text-5xl font-black">
+                                {isWeatherLoading ? (
+                                    <Loader2 className="animate-spin opacity-50" />
+                                ) : (
+                                    Math.round(temp!) + "°"
+                                )}
+                            </div>
                         </div>
-                        <span className="text-2xl font-bold text-[#37352F]">{tasksCount}</span>
+                        <CloudRain size={48} className="text-blue-200" />
                     </div>
-                    <div className="text-sm font-medium text-gray-600 mb-1">Мои задачи</div>
-                    <div className="text-xs text-gray-400 group-hover:text-blue-500 flex items-center gap-1 transition-colors">
-                        Перейти к списку <ArrowRight size={12} />
-                    </div>
-                </Link>
-
-                {/* Виджет: Погода */}
-                <Link to="/weather" className="group bg-white p-6 rounded-xl border border-[#E9E9E7] shadow-sm hover:shadow-md transition-all hover:border-orange-200">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 bg-orange-50 text-orange-500 rounded-lg">
-                            <CloudSun size={24} />
-                        </div>
-                        {typeof weatherTemp === 'number' && (
-                            <span className="text-2xl font-bold text-[#37352F]">
-                                {Math.round(weatherTemp)}°
-                            </span>
-                        )}
-                    </div>
-                    <div className="text-sm font-medium text-gray-600 mb-1">Погода</div>
-                    <div className="text-xs text-gray-400 group-hover:text-orange-500 flex items-center gap-1 transition-colors">
-                        Подробнее <ArrowRight size={12} />
-                    </div>
-                </Link>
-
-                {/* Виджет: Календарь (Дата) */}
-                <Link to="/calendar" className="group bg-white p-6 rounded-xl border border-[#E9E9E7] shadow-sm hover:shadow-md transition-all hover:border-red-200">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 bg-red-50 text-red-500 rounded-lg">
-                            <Calendar size={24} />
-                        </div>
-                        <span className="text-xl font-bold text-[#37352F]">
-              {new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-            </span>
-                    </div>
-                    <div className="text-sm font-medium text-gray-600 mb-1">Календарь</div>
-                    <div className="text-xs text-gray-400 group-hover:text-red-500 flex items-center gap-1 transition-colors">
-                        Открыть <ArrowRight size={12} />
-                    </div>
-                </Link>
-            </div>
-
-            {/* 3. Быстрые действия (Quick Actions) */}
-            <h2 className="text-lg font-semibold text-[#37352F] mb-4">Быстрый доступ</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Link to="/todo" className="flex items-center gap-3 p-3 bg-white border border-[#E9E9E7] rounded-lg hover:bg-gray-50 transition-colors">
-                    <Plus size={18} className="text-green-600" />
-                    <span className="text-sm font-medium text-gray-700">Новая задача</span>
-                </Link>
-
-                <Link to="/calculator" className="flex items-center gap-3 p-3 bg-white border border-[#E9E9E7] rounded-lg hover:bg-gray-50 transition-colors">
-                    <Calculator size={18} className="text-purple-600" />
-                    <span className="text-sm font-medium text-gray-700">Посчитать</span>
-                </Link>
+                )}
             </div>
         </div>
     );

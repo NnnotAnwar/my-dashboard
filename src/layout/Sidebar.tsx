@@ -1,7 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, CheckSquare, CloudSun, Calculator, Calendar, LogOut, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import {
+    LayoutDashboard, CheckSquare, CloudSun,
+    Calculator, Calendar, LogOut, X, Languages
+} from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { clsx } from "clsx";
+import { useLanguage } from "../context/LanguageContext";
 
 interface SidebarProps {
     isOpen: boolean;
@@ -10,86 +15,101 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
     const location = useLocation();
+    const { t, lang, toggleLang } = useLanguage();
 
     const menuItems = [
-        { icon: LayoutDashboard, label: "Главная", path: "/" },
-        { icon: CheckSquare, label: "Задачи", path: "/todo" },
-        { icon: Calendar, label: "Календарь", path: "/calendar" },
-        { icon: CloudSun, label: "Погода", path: "/weather" },
-        { icon: Calculator, label: "Калькулятор", path: "/calculator" },
+        { icon: LayoutDashboard, label: t.nav.dashboard, path: "/" },
+        { icon: CheckSquare, label: t.nav.todo, path: "/todo" },
+        { icon: Calendar, label: t.nav.calendar, path: "/calendar" },
+        { icon: CloudSun, label: t.nav.weather, path: "/weather" },
+        { icon: Calculator, label: t.nav.calculator, path: "/calculator" },
     ];
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
     };
 
+    // --- КОНТЕНТ МЕНЮ ---
+    const MenuContent = () => (
+        <>
+            <div className="flex items-center justify-between mb-8 px-2">
+                <div className="flex items-center gap-3 font-black text-2xl text-[#37352F]">
+                    <div className="w-8 h-8 bg-[#37352F] rounded-lg flex items-center justify-center text-white text-sm">A</div>
+                    AnwarApp
+                </div>
+                {/* Кнопка закрытия (БОЛЬШАЯ и УДОБНАЯ) */}
+                <button
+                    onClick={onClose}
+                    className="md:hidden p-2 text-gray-500 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                >
+                    <X size={28} />
+                </button>
+            </div>
+
+            <nav className="space-y-2 flex-1">
+                {menuItems.map((item) => {
+                    const isActive = location.pathname === item.path;
+                    return (
+                        <Link
+                            key={item.path}
+                            to={item.path}
+                            onClick={onClose}
+                            className={clsx(
+                                "flex items-center gap-4 px-4 py-4 text-base rounded-2xl transition-all", // Увеличили отступы для пальцев
+                                isActive
+                                    ? "bg-black text-white shadow-lg shadow-gray-300 font-bold"
+                                    : "text-gray-500 hover:bg-gray-100 font-medium"
+                            )}
+                        >
+                            <item.icon size={24} className={isActive ? "opacity-100" : "opacity-70"} />
+                            {item.label}
+                        </Link>
+                    );
+                })}
+            </nav>
+
+            <div className="mt-auto space-y-3 pt-6 border-t border-gray-100">
+                <button
+                    onClick={toggleLang}
+                    className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-white border border-gray-100 text-gray-600 font-bold uppercase tracking-wider"
+                >
+                    <Languages size={20} /> {lang === 'en' ? 'English' : 'Русский'}
+                </button>
+
+                <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl bg-red-50 text-red-500 font-bold"
+                >
+                    <LogOut size={20} /> {t.nav.logout}
+                </button>
+            </div>
+        </>
+    );
+
+    // 1. ДЕСКТОП (Слева, ширина 64)
+    const desktopSidebar = (
+        <div className="hidden md:flex fixed top-0 left-0 min-h-screen w-64 bg-[#F7F7F5] border-r border-[#E9E9E7] p-6 flex-col z-10">
+            <MenuContent />
+        </div>
+    );
+
+    // 2. МОБИЛЬНОЕ МЕНЮ (НА ВЕСЬ ЭКРАН)
+    const mobileSidebar = isOpen ? createPortal(
+        <div className="fixed inset-0 z-[99999] md:hidden bg-[#F7F7F5] p-6 flex flex-col animate-in slide-in-from-bottom duration-300">
+            {/* ☝️ ТУТ ГЛАВНОЕ:
+                - fixed inset-0 (на весь экран)
+                - z-[99999] (поверх всего)
+                - bg-[#F7F7F5] (непрозрачный фон)
+             */}
+            <MenuContent />
+        </div>,
+        document.body
+    ) : null;
+
     return (
         <>
-            {/* 1. Затемнение фона (Overlay) - только на мобильном, когда меню открыто */}
-            <div
-                className={clsx(
-                    "fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity",
-                    isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-                )}
-                onClick={onClose}
-            />
-
-            {/* 2. Само меню */}
-            <div
-                className={clsx(
-                    // Было h-full, стало min-h-screen:
-                    "fixed top-0 left-0 min-h-screen w-64 bg-[#F7F7F5] border-r border-[#E9E9E7] p-4 flex flex-col z-50 transition-transform duration-300 ease-in-out md:translate-x-0 md:static",
-                    isOpen ? "translate-x-0" : "-translate-x-full"
-                )}
-            >
-                {/* Заголовок и кнопка закрытия (для мобильных) */}
-                <div className="flex items-center justify-between mb-6 px-2">
-                    <div className="flex items-center gap-2 font-bold text-[#37352F]">
-                        <div className="w-6 h-6 bg-[#37352F] rounded flex items-center justify-center text-white text-xs">
-                            M
-                        </div>
-                        MyDashboard
-                    </div>
-                    {/* Кнопка крестик (видна только на мобильном) */}
-                    <button onClick={onClose} className="md:hidden p-1 text-gray-500">
-                        <X size={24} />
-                    </button>
-                </div>
-
-                {/* Список пунктов */}
-                <nav className="space-y-1">
-                    {menuItems.map((item) => {
-                        const isActive = location.pathname === item.path;
-                        return (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                onClick={onClose} // Закрываем меню при клике на ссылку (на мобильном)
-                                className={clsx(
-                                    "flex items-center gap-3 px-3 py-2 text-sm rounded transition-colors",
-                                    isActive
-                                        ? "bg-[#EFEFEF] text-[#37352F] font-medium"
-                                        : "text-gray-600 hover:bg-[#EFEFEF]"
-                                )}
-                            >
-                                <item.icon size={18} className={isActive ? "opacity-100" : "opacity-70"} />
-                                {item.label}
-                            </Link>
-                        );
-                    })}
-                </nav>
-
-                {/* Кнопка выхода */}
-                <div className="mt-auto pt-4 border-t border-[#E9E9E7]">
-                    <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-600 rounded hover:bg-red-50 hover:text-red-600 transition-colors text-left"
-                    >
-                        <LogOut size={18} className="opacity-70" />
-                        Выйти
-                    </button>
-                </div>
-            </div>
+            {desktopSidebar}
+            {mobileSidebar}
         </>
     );
 }
