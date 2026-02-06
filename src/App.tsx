@@ -59,6 +59,12 @@ function App() {
                     <Route path="/weather" element={<Weather />} />
                     <Route path="/calculator" element={<Calculator />} />
                     <Route path="/calendar" element={<Calendar />} />
+                    <Route path="*" element={
+                        <div className="flex flex-col items-center justify-center h-[60vh] text-gray-500">
+                            <h2 className="text-4xl font-bold mb-2">404</h2>
+                            <p>Страница не найдена</p>
+                        </div>
+                    } />
                 </Routes>
             </AppLayout>
         </BrowserRouter>

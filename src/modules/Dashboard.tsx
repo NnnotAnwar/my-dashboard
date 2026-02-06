@@ -14,7 +14,7 @@ import {useQuery} from "@tanstack/react-query";
 
 async function fetchWeather() {
     try {
-        const res = await fetch("https://api.open-meteo.com/v1/forecast?latitude=55.75&longitude=37.61&current=temperature_2m");
+        const res = await fetch("https://api.open-meteo.com/v1/forecast?latitude=50.0755&longitude=14.4378&current=temperature_2m");
         const data = await res.json();
         const temperature: number = data.current.temperature_2m;
         return temperature;
