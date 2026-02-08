@@ -22,7 +22,7 @@ const TRANSLATIONS = {
             stat_tasks: "Pending tasks",
             stat_weather: "Current weather"
         },
-        // Словари для Todo мы тоже перенесли сюда
+
         todo: {
             title: "Tasks",
             active: "active",
