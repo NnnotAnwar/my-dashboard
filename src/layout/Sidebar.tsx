@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { clsx } from "clsx";
-import { useLanguage } from "../context/LanguageContext";
+import { useLanguage } from "../context/useLanguage";
 import { useUserRole } from "../hooks/useUserRole";
 
 interface SidebarProps {

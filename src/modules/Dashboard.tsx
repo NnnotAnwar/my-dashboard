@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, CloudRain, CheckSquare } from "lucide-react";
 import { supabase } from "../supabaseClient";
-import { useLanguage } from "../context/LanguageContext";
+import { useLanguage } from "../context/useLanguage";
 
 // 1. Функция получения погоды
 async function fetchWeather(): Promise<number | null> {

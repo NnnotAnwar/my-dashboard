@@ -15,7 +15,7 @@ import { ru } from "date-fns/locale";
 import { enUS } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { clsx } from "clsx";
-import { useLanguage } from "../context/LanguageContext";
+import { useLanguage } from "../context/useLanguage";
 
 export function Calendar() {
     const { t, lang } = useLanguage();

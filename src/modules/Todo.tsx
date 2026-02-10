@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform } from "framer-motion";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { useLanguage } from "../context/LanguageContext";
+import { useLanguage } from "../context/useLanguage";
 
 // --- ТИПЫ ---
 interface TodoItem {

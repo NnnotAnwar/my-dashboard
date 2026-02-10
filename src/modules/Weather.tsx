@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Cloud, CloudRain, CloudSun, Sun, Snowflake, Loader2, Search, MapPin } from "lucide-react";
-import { useLanguage } from "../context/LanguageContext";
+import { useLanguage } from "../context/useLanguage";
 
 interface WeatherData {
     temperature: number;
