@@ -11,6 +11,8 @@ import { Todo } from "./modules/Todo";
 import { Weather } from "./modules/Weather";
 import { Calculator } from "./modules/Calculator";
 import { Calendar } from "./modules/Calendar";
+import { AdminPanel } from "./modules/AdminPanel";
+import { NotFound } from "./components/NotFound";
 import { Loader2 } from "lucide-react";
 
 
@@ -59,12 +61,8 @@ function App() {
                     <Route path="/weather" element={<Weather />} />
                     <Route path="/calculator" element={<Calculator />} />
                     <Route path="/calendar" element={<Calendar />} />
-                    <Route path="*" element={
-                        <div className="flex flex-col items-center justify-center h-[60vh] text-gray-500">
-                            <h2 className="text-4xl font-bold mb-2">404</h2>
-                            <p>Страница не найдена</p>
-                        </div>
-                    } />
+                    <Route path="/admin" element={<AdminPanel />} />
+                    <Route path="*" element={<NotFound />} />
                 </Routes>
             </AppLayout>
         </BrowserRouter>

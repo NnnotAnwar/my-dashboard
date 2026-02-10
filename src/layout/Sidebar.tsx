@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
     LayoutDashboard, CheckSquare, CloudSun,
-    Calculator, Calendar, LogOut, X, Languages
+    Calculator, Calendar, Shield, LogOut, X, Languages
 } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { clsx } from "clsx";
@@ -23,6 +23,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { icon: Calendar, label: t.nav.calendar, path: "/calendar" },
         { icon: CloudSun, label: t.nav.weather, path: "/weather" },
         { icon: Calculator, label: t.nav.calculator, path: "/calculator" },
+        { icon: Shield, label: t.nav.admin, path: "/admin" },
     ];
 
     const handleLogout = async () => {

@@ -3,6 +3,8 @@
 > **⚠️ Status: Work in Progress**
 > This project is currently under active development. Most features are still being built and polished.
 
+> **📝 Note:** Code comments in this repository are often written in Russian.
+
 A modern, high-performance web application for personal productivity. It combines a real-time dashboard with an AI-powered task manager.
 
 Built with **React 18**, **TypeScript**, and **Supabase**, featuring **Google Gemini AI** integration for smart task generation.

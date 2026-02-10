@@ -11,8 +11,13 @@ const TRANSLATIONS = {
             weather: "Weather",
             calculator: "Calculator",
             calendar: "Calendar",
+            admin: "Admin",
             logout: "Log out",
             lang: "Language"
+        },
+        notFound: {
+            title: "404",
+            description: "Page not found"
         },
         dashboard: {
             greeting_morning: "Good morning",
@@ -40,8 +45,13 @@ const TRANSLATIONS = {
             weather: "Погода",
             calculator: "Калькулятор",
             calendar: "Календарь",
+            admin: "Админ",
             logout: "Выйти",
             lang: "Язык"
+        },
+        notFound: {
+            title: "404",
+            description: "Страница не найдена"
         },
         dashboard: {
             greeting_morning: "Доброе утро",
