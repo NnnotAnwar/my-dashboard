@@ -11,12 +11,16 @@ import {
     addMonths,
     subMonths
 } from "date-fns";
-import { ru } from "date-fns/locale"; // Для русского языка
+import { ru } from "date-fns/locale";
+import { enUS } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { clsx } from "clsx";
+import { useLanguage } from "../context/LanguageContext";
 
 export function Calendar() {
+    const { t, lang } = useLanguage();
     const [currentDate, setCurrentDate] = useState(new Date());
+    const locale = lang === "ru" ? ru : enUS;
 
     // 1. Вычисляем границы календаря для текущего месяца
     // Например: если сейчас Февраль, нам нужно начать показ с 26 Января (понедельник)
@@ -31,8 +35,7 @@ export function Calendar() {
         end: endDate,
     });
 
-    // Дни недели для шапки
-    const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+    const weekDays = t.calendar.weekdays;
 
     // Переключение месяцев
     const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
@@ -54,16 +57,16 @@ export function Calendar() {
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-[#37352F] capitalize">
-                        {format(currentDate, "LLLL yyyy", { locale: ru })}
+                        {format(currentDate, "LLLL yyyy", { locale })}
                     </h1>
                     <p className="text-gray-500 text-sm mt-1">
-                        Кликни на дату, чтобы создать событие в Google
+                        {t.calendar.title_hint}
                     </p>
                 </div>
 
                 <div className="flex items-center gap-2">
                     <button onClick={goToToday} className="text-sm font-medium px-3 py-1 hover:bg-[#EFEFEF] rounded transition-colors">
-                        Сегодня
+                        {t.calendar.today}
                     </button>
                     <div className="flex items-center bg-[#F7F7F5] rounded p-1">
                         <button onClick={prevMonth} className="p-1 hover:bg-white rounded shadow-sm transition-all">
@@ -122,7 +125,7 @@ export function Calendar() {
                                 {/* Место под события (пока визуальное) */}
                                 {isToday && (
                                     <div className="mt-2 text-xs bg-red-100 text-red-600 px-1 py-0.5 rounded truncate">
-                                        Сегодня
+                                        {t.calendar.today}
                                     </div>
                                 )}
                             </div>

@@ -56,9 +56,10 @@ export function Dashboard() {
         refetchOnWindowFocus: false
     });
 
-    const { data: taskCount } = useQuery({ queryKey: ['taskCount'], queryFn: fetchTaskCount });
-
-    // Запрашиваем имя
+    const { data: taskCount, isError: isTaskCountError, refetch: refetchTaskCount } = useQuery({
+        queryKey: ['taskCount'],
+        queryFn: fetchTaskCount,
+    });
     const { data: userName } = useQuery({ queryKey: ['userName'], queryFn: fetchUserName });
 
     const getGreeting = () => {
@@ -72,6 +73,14 @@ export function Dashboard() {
 
     return (
         <div className="space-y-6">
+            {isTaskCountError && (
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm font-medium">
+                    <span>{t.errors.load_failed}</span>
+                    <button onClick={() => refetchTaskCount()} className="underline font-bold">
+                        {t.errors.retry}
+                    </button>
+                </div>
+            )}
             <header>
                 {/* 👇 ТЕПЕРЬ ИМЯ ДИНАМИЧЕСКОЕ */}
                 <h1 className="text-4xl font-black text-[#202124] tracking-tight mb-2">

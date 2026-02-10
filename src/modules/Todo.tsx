@@ -1,14 +1,14 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     Plus, Trash2, Check, Loader2, Sparkles,
     Calendar as CalendarIcon, Clock, CheckCheck,
-    ShieldAlert, ArrowLeft, X, GripHorizontal, Languages
+    X, GripHorizontal
 } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform } from "framer-motion";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { AdminPanel } from "./AdminPanel";
+import { useLanguage } from "../context/LanguageContext";
 
 // --- ТИПЫ ---
 interface TodoItem {
@@ -18,54 +18,6 @@ interface TodoItem {
     due_date: string | null;
     category: string;
 }
-
-type Lang = 'en' | 'ru';
-
-// --- СЛОВАРЬ ПЕРЕВОДОВ (DICTIONARY) ---
-const TRANSLATIONS = {
-    en: {
-        title: "Tasks",
-        active: "active",
-        placeholder_ai: "AI plan (e.g., Trip to Paris)...",
-        placeholder_default: "New task...",
-        add: "Add",
-        all_done: "Done all",
-        clear: "Clear",
-        empty_title: "Coconut vibes",
-        empty_text: "No tasks yet. Relax?",
-        modal_title: "Are you sure?",
-        modal_text: "Completed tasks will be permanently deleted.",
-        modal_cancel: "Cancel",
-        modal_confirm: "Yes, delete",
-        categories: {
-            home: "Home",
-            work: "Work",
-            study: "Study",
-            shop: "Shop"
-        }
-    },
-    ru: {
-        title: "Задачи",
-        active: "активных",
-        placeholder_ai: "AI план (напр. Поездка в Питер)...",
-        placeholder_default: "Новая задача...",
-        add: "Добавить",
-        all_done: "Все готово",
-        clear: "Очистить",
-        empty_title: "Режим кокоса",
-        empty_text: "Задач нет. Отдыхаем?",
-        modal_title: "Вы уверены?",
-        modal_text: "Выполненные задачи будут удалены навсегда.",
-        modal_cancel: "Отмена",
-        modal_confirm: "Да, удалить",
-        categories: {
-            home: "Дом",
-            work: "Работа",
-            study: "Учеба",
-            shop: "Покупки"
-        }
-    }
-};
 
 const CATEGORIES_CONFIG = [
     { id: "home", color: "bg-emerald-100 text-emerald-700", icon: "🏠" },
@@ -92,13 +44,6 @@ const fetchTodos = async () => {
         .order("created_at", { ascending: false });
     if (error) throw error;
     return data as TodoItem[];
-};
-
-const fetchUserRole = async () => {
-    const user = await getUser();
-    const { data, error } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-    if (error) return "user";
-    return data?.role || "user";
 };
 
 const createTodo = async (newItem: { title: string; date: string | null; category: string }) => {
@@ -130,12 +75,14 @@ const markAllAsCompleted = async () => {
     if (error) throw error;
 };
 
+type CategoryLabels = Record<string, string>;
+
 // --- SWIPEABLE COMPONENT ---
-function SwipeableTodoItem({ todo, toggle, remove, lang }: { todo: TodoItem, toggle: any, remove: any, lang: Lang }) {
+function SwipeableTodoItem({ todo, toggle, remove, lang, categories }: { todo: TodoItem; toggle: { mutate: (p: { id: string; isCompleted: boolean }) => void }; remove: { mutate: (id: string) => void }; lang: "en" | "ru"; categories: CategoryLabels }) {
     const x = useMotionValue(0);
     const background = useTransform(x, [-100, 0, 100], ["#ef4444", "#ffffff", "#22c55e"]);
 
-    const handleDragEnd = (_: any, info: any) => {
+    const handleDragEnd = (_: unknown, info: { offset: { x: number } }) => {
         const threshold = 100;
         if (info.offset.x > threshold) {
             if (navigator.vibrate) navigator.vibrate(50);
@@ -147,8 +94,7 @@ function SwipeableTodoItem({ todo, toggle, remove, lang }: { todo: TodoItem, tog
     };
 
     const catConfig = CATEGORIES_CONFIG.find(c => c.id === todo.category) || CATEGORIES_CONFIG[0];
-    // @ts-ignore
-    const catLabel = TRANSLATIONS[lang].categories[catConfig.id];
+    const catLabel = categories[catConfig.id] ?? catConfig.id;
 
     // Dynamic Locale for Date
     const locale = lang === 'en' ? 'en-US' : 'ru-RU';
@@ -210,43 +156,37 @@ function SwipeableTodoItem({ todo, toggle, remove, lang }: { todo: TodoItem, tog
 
 // --- MAIN COMPONENT ---
 export function Todo() {
-    // State for Language (Default English)
-    const [lang, setLang] = useState<Lang>(() => {
-        return (localStorage.getItem('app_lang') as Lang) || 'en';
-    });
-
+    const { lang, t } = useLanguage();
     const [newTodo, setNewTodo] = useState("");
     const [selectedDate, setSelectedDate] = useState<string>("");
     const [selectedCategory, setSelectedCategory] = useState<string>("home");
     const [aiMode, setAiMode] = useState(false);
     const [aiLoading, setAiLoading] = useState(false);
     const [isCategoryOpen, setIsCategoryOpen] = useState(false);
-
-    const [showAdminPanel, setShowAdminPanel] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
 
     const dateInputRef = useRef<HTMLInputElement>(null);
     const queryClient = useQueryClient();
 
-    const { data: todos = [], isLoading } = useQuery({ queryKey: ['todos'], queryFn: fetchTodos });
-    const { data: userRole } = useQuery({ queryKey: ['userRole'], queryFn: fetchUserRole });
-    const isAdmin = userRole === 'admin';
+    const { data: todos = [], isLoading, isError: isTodosError, refetch: refetchTodos } = useQuery({ queryKey: ['todos'], queryFn: fetchTodos });
 
-    // Save language to local storage
-    useEffect(() => {
-        localStorage.setItem('app_lang', lang);
-    }, [lang]);
-
+    const clearError = () => setErrorMessage(null);
     const onSuccess = () => {
+        clearError();
         queryClient.invalidateQueries({ queryKey: ['todos'] });
-        queryClient.invalidateQueries({ queryKey: ['weather'] });
+        queryClient.invalidateQueries({ queryKey: ['taskCount'] });
+    };
+    const onError = () => {
+        setErrorMessage(t.errors.save_failed);
+        setTimeout(clearError, 5000);
     };
 
-    const addMutation = useMutation({ mutationFn: createTodo, onSuccess });
-    const toggleMutation = useMutation({ mutationFn: toggleTodoStatus, onSuccess });
-    const deleteMutation = useMutation({ mutationFn: deleteTodoItem, onSuccess });
-    const deleteCompletedMutation = useMutation({ mutationFn: deleteCompletedTodos, onSuccess: () => { onSuccess(); setShowDeleteModal(false); } });
-    const markAllMutation = useMutation({ mutationFn: markAllAsCompleted, onSuccess });
+    const addMutation = useMutation({ mutationFn: createTodo, onSuccess, onError });
+    const toggleMutation = useMutation({ mutationFn: toggleTodoStatus, onSuccess, onError });
+    const deleteMutation = useMutation({ mutationFn: deleteTodoItem, onSuccess, onError });
+    const deleteCompletedMutation = useMutation({ mutationFn: deleteCompletedTodos, onSuccess: () => { onSuccess(); setShowDeleteModal(false); }, onError });
+    const markAllMutation = useMutation({ mutationFn: markAllAsCompleted, onSuccess, onError });
 
     const handleSubmit = async (e?: React.FormEvent) => {
         e?.preventDefault();
@@ -304,42 +244,36 @@ export function Todo() {
             }
         } catch (e) {
             console.error("AI Error:", e);
+            setErrorMessage(t.errors.ai_failed);
+            setTimeout(clearError, 5000);
         } finally {
             setAiLoading(false);
             setAiMode(false);
         }
     };
 
-    const toggleLang = () => setLang(prev => prev === 'en' ? 'ru' : 'en');
-    const t = TRANSLATIONS[lang]; // Current translations
-
     const locale = lang === 'en' ? 'en-US' : 'ru-RU';
     const formatDate = (d: string) => d ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(new Date(d)) : null;
     const currentCatConfig = CATEGORIES_CONFIG.find(c => c.id === selectedCategory) || CATEGORIES_CONFIG[0];
 
-    if (showAdminPanel) return <div className="max-w-4xl mx-auto p-4"><button onClick={() => setShowAdminPanel(false)} className="mb-6 flex items-center gap-2 text-gray-500 hover:text-black font-medium"><ArrowLeft size={20} /> Back</button><AdminPanel /></div>;
     if (isLoading) return <div className="h-[50vh] flex items-center justify-center"><Loader2 className="animate-spin text-gray-300" size={32}/></div>;
 
     return (
         <div className="max-w-2xl mx-auto px-4 pb-20 overflow-x-hidden">
+            {(errorMessage || isTodosError) && (
+                <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm font-medium">
+                    <span>{errorMessage || t.errors.load_failed}</span>
+                    <button onClick={() => { clearError(); isTodosError && refetchTodos(); }} className="underline font-bold">
+                        {t.errors.retry}
+                    </button>
+                </div>
+            )}
             <div className="flex justify-between items-end mb-8">
                 <div>
-                    <h1 className="text-4xl font-black text-[#202124] tracking-tight mb-1">{t.title}</h1>
+                    <h1 className="text-4xl font-black text-[#202124] tracking-tight mb-1">{t.todo.title}</h1>
                     <p className="text-gray-400 font-medium">
-                        {todos.filter(t => !t.is_completed).length} {t.active}
+                        {todos.filter(item => !item.is_completed).length} {t.todo.active}
                     </p>
-                </div>
-
-                <div className="flex gap-2">
-                    {/* LANGUAGE TOGGLE */}
-                    <button
-                        onClick={toggleLang}
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-bold transition-colors uppercase"
-                    >
-                        <Languages size={16} /> {lang}
-                    </button>
-
-                    {isAdmin && <button onClick={() => setShowAdminPanel(true)} className="text-red-500 bg-red-50 p-2 rounded-xl hover:bg-red-100 transition-colors"><ShieldAlert size={20}/></button>}
                 </div>
             </div>
 
@@ -370,8 +304,7 @@ export function Todo() {
                                             className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${selectedCategory === cat.id ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"}`}
                                         >
                                             <span>{cat.icon}</span>
-                                            {/* @ts-ignore */}
-                                            {t.categories[cat.id]}
+                                            {t.todo.categories[cat.id as keyof typeof t.todo.categories]}
                                         </button>
                                     ))}
                                 </motion.div>
@@ -385,7 +318,7 @@ export function Todo() {
                         value={newTodo}
                         onChange={(e) => setNewTodo(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSubmit(e)}
-                        placeholder={aiMode ? t.placeholder_ai : t.placeholder_default}
+                        placeholder={aiMode ? t.todo.ai_placeholder : t.todo.placeholder}
                         className={`flex-1 min-w-0 py-4 bg-transparent outline-none text-lg font-medium placeholder:text-gray-300 ${aiMode ? "text-purple-700 placeholder:text-purple-300" : "text-gray-800"}`}
                         disabled={aiLoading}
                     />
@@ -432,7 +365,7 @@ export function Todo() {
             <motion.ul layout className="space-y-0">
                 <AnimatePresence mode="popLayout">
                     {todos.map((todo) => (
-                        <SwipeableTodoItem key={todo.id} todo={todo} toggle={toggleMutation} remove={deleteMutation} lang={lang} />
+                        <SwipeableTodoItem key={todo.id} todo={todo} toggle={toggleMutation} remove={deleteMutation} lang={lang} categories={t.todo.categories} />
                     ))}
                 </AnimatePresence>
             </motion.ul>
@@ -440,20 +373,20 @@ export function Todo() {
             {todos.length === 0 && !isLoading && (
                 <div className="text-center py-20 opacity-50">
                     <div className="text-6xl mb-4">🥥</div>
-                    <p className="text-gray-500 font-medium">{t.empty_text}</p>
+                    <p className="text-gray-500 font-medium">{t.todo.empty_text}</p>
                 </div>
             )}
 
             {todos.length > 0 && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex gap-2 bg-white/90 backdrop-blur-md p-1.5 rounded-2xl shadow-2xl border border-gray-200/50 z-50">
-                    {todos.some(t => !t.is_completed) && (
+                    {todos.some(item => !item.is_completed) && (
                         <button onClick={() => markAllMutation.mutate()} className="px-4 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-xl transition-colors flex items-center gap-2">
-                            <CheckCheck size={14} /> {t.all_done}
+                            <CheckCheck size={14} /> {t.todo.all_done}
                         </button>
                     )}
-                    {todos.some(t => t.is_completed) && (
+                    {todos.some(item => item.is_completed) && (
                         <button onClick={() => setShowDeleteModal(true)} className="px-4 py-2 text-xs font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors flex items-center gap-2">
-                            <Trash2 size={14} /> {t.clear}
+                            <Trash2 size={14} /> {t.todo.clear}
                         </button>
                     )}
                 </div>
@@ -464,11 +397,11 @@ export function Todo() {
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDeleteModal(false)} className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
                         <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white p-6 rounded-[32px] shadow-2xl max-w-sm w-full">
-                            <h3 className="text-xl font-bold text-center mb-2">{t.modal_title}</h3>
-                            <p className="text-gray-500 text-center text-sm mb-6">{t.modal_text}</p>
+                            <h3 className="text-xl font-bold text-center mb-2">{t.todo.modal_title}</h3>
+                            <p className="text-gray-500 text-center text-sm mb-6">{t.todo.modal_text}</p>
                             <div className="flex gap-2">
-                                <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-3 bg-gray-100 font-bold rounded-xl text-gray-600 hover:bg-gray-200 transition-colors">{t.modal_cancel}</button>
-                                <button onClick={() => deleteCompletedMutation.mutate()} className="flex-1 py-3 bg-black font-bold rounded-xl text-white hover:bg-gray-800 transition-colors">{t.modal_confirm}</button>
+                                <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-3 bg-gray-100 font-bold rounded-xl text-gray-600 hover:bg-gray-200 transition-colors">{t.todo.modal_cancel}</button>
+                                <button onClick={() => deleteCompletedMutation.mutate()} className="flex-1 py-3 bg-black font-bold rounded-xl text-white hover:bg-gray-800 transition-colors">{t.todo.modal_confirm}</button>
                             </div>
                         </motion.div>
                     </div>

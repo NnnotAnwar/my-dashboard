@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Cloud, CloudRain, CloudSun, Sun, Snowflake, Loader2, Search, MapPin } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
 
 interface WeatherData {
     temperature: number;
@@ -8,12 +9,12 @@ interface WeatherData {
 }
 
 export function Weather() {
-    const [cityQuery, setCityQuery] = useState(""); // Что ввел пользователь
+    const { t, lang } = useLanguage();
+    const [cityQuery, setCityQuery] = useState("");
     const [weather, setWeather] = useState<WeatherData | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // По умолчанию попробуем загрузить погоду для какого-то города (например, Москва), чтобы не было пусто
     useEffect(() => {
         handleSearch("Prague");
     }, []);
@@ -26,12 +27,12 @@ export function Weather() {
 
         try {
             // 1. Сначала ищем координаты города по названию
-            const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${query}&count=1&language=ru&format=json`;
+            const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=${lang === "ru" ? "ru" : "en"}&format=json`;
             const geoRes = await fetch(geoUrl);
             const geoData = await geoRes.json();
 
             if (!geoData.results || geoData.results.length === 0) {
-                throw new Error("Город не найден");
+                throw new Error("City not found");
             }
 
             const { latitude, longitude, name } = geoData.results[0];
@@ -48,7 +49,7 @@ export function Weather() {
             });
 
         } catch {
-            setError("Не удалось найти город или данные о погоде");
+            setError(t.weather.error_message);
         } finally {
             setLoading(false);
         }
@@ -70,21 +71,20 @@ export function Weather() {
     };
 
     const getDescription = (code: number) => {
-        if (code === 0) return "Ясно";
-        if (code >= 1 && code <= 3) return "Облачно";
-        if (code >= 51 && code <= 67) return "Дождь";
-        if (code >= 71 && code <= 86) return "Снег";
-        return "Пасмурно";
+        if (code === 0) return t.weather.clear;
+        if (code >= 1 && code <= 3) return t.weather.cloudy;
+        if (code >= 51 && code <= 67) return t.weather.rain;
+        if (code >= 71 && code <= 86) return t.weather.snow;
+        return t.weather.overcast;
     };
 
     return (
         <div className="max-w-md">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-[#37352F] mb-2">Погода</h1>
-                <p className="text-gray-500">Узнай погоду в любой точке мира.</p>
+                <h1 className="text-3xl font-bold text-[#37352F] mb-2">{t.weather.title}</h1>
+                <p className="text-gray-500">{t.weather.subtitle}</p>
             </div>
 
-            {/* Поле поиска */}
             <div className="flex items-center gap-3 mb-6 p-2 rounded border border-[#E9E9E7] bg-white focus-within:ring-2 ring-blue-100 transition-all">
                 <Search className="text-gray-400" size={20} />
                 <input
@@ -92,7 +92,7 @@ export function Weather() {
                     value={cityQuery}
                     onChange={(e) => setCityQuery(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Введите город (например: London)..."
+                    placeholder={t.weather.placeholder}
                     className="flex-1 bg-transparent border-none outline-none text-[#37352F] placeholder:text-gray-400 h-8"
                 />
                 {loading && <Loader2 className="animate-spin text-gray-400" size={18} />}

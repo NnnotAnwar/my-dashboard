@@ -11,8 +11,9 @@ import { Todo } from "./modules/Todo";
 import { Weather } from "./modules/Weather";
 import { Calculator } from "./modules/Calculator";
 import { Calendar } from "./modules/Calendar";
-import { AdminPanel } from "./modules/AdminPanel";
+import { AdminRoute } from "./components/AdminRoute";
 import { NotFound } from "./components/NotFound";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Loader2 } from "lucide-react";
 
 
@@ -51,20 +52,21 @@ function App() {
         return <Auth />;
     }
 
-    // Если вошли - показываем приложение
     return (
         <BrowserRouter>
-            <AppLayout>
-                <Routes>
+            <ErrorBoundary>
+                <AppLayout>
+                    <Routes>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/todo" element={<Todo />} />
                     <Route path="/weather" element={<Weather />} />
                     <Route path="/calculator" element={<Calculator />} />
                     <Route path="/calendar" element={<Calendar />} />
-                    <Route path="/admin" element={<AdminPanel />} />
+                    <Route path="/admin" element={<AdminRoute />} />
                     <Route path="*" element={<NotFound />} />
-                </Routes>
-            </AppLayout>
+                    </Routes>
+                </AppLayout>
+            </ErrorBoundary>
         </BrowserRouter>
     );
 }

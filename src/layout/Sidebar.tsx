@@ -7,6 +7,7 @@ import {
 import { supabase } from "../supabaseClient";
 import { clsx } from "clsx";
 import { useLanguage } from "../context/LanguageContext";
+import { useUserRole } from "../hooks/useUserRole";
 
 interface SidebarProps {
     isOpen: boolean;
@@ -16,14 +17,18 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
     const location = useLocation();
     const { t, lang, toggleLang } = useLanguage();
+    const { isAdmin } = useUserRole();
 
-    const menuItems = [
+    const baseItems = [
         { icon: LayoutDashboard, label: t.nav.dashboard, path: "/" },
         { icon: CheckSquare, label: t.nav.todo, path: "/todo" },
         { icon: Calendar, label: t.nav.calendar, path: "/calendar" },
         { icon: CloudSun, label: t.nav.weather, path: "/weather" },
         { icon: Calculator, label: t.nav.calculator, path: "/calculator" },
-        { icon: Shield, label: t.nav.admin, path: "/admin" },
+    ];
+    const menuItems = [
+        ...baseItems,
+        ...(isAdmin ? [{ icon: Shield, label: t.nav.admin, path: "/admin" as const }] : []),
     ];
 
     const handleLogout = async () => {
